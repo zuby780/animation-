@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blooming Flowers</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&display=swap');
+
+  :root {
+    --bg: #060e0d;
+    --teal: #3dd6b5;
+    --teal-dark: #1a7a68;
+    --teal-glow: rgba(61, 214, 181, 0.35);
+    --petal: #b8f0e0;
+    --leaf-dark: #0a3528;
+    --leaf-mid: #0f5c44;
+    --leaf-bright: #12a06e;
+    --stem: #0d4a38;
+    --spark: #d4fff2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'Cormorant Garamond', serif;
+  }
+
+  .title {
+    color: var(--teal);
+    font-size: 1.5rem;
+    letter-spacing: 0.3em;
+    opacity: 0.7;
+    margin-bottom: 2rem;
+    font-style: italic;
+    animation: fadeIn 2s ease forwards;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 0.7; } }
+
+  canvas {
+    display: block;
+    border-radius: 16px;
+  }
+
+  .hint {
+    color: var(--teal-dark);
+    font-size: 0.8rem;
+    margin-top: 1.5rem;
+    letter-spacing: 0.2em;
+    font-style: italic;
+    animation: fadeIn 3s ease 1s forwards;
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+
+<p class="title">zubair</p>
+<canvas id="c" width="700" height="500"></canvas>
+<p class="hint">click to bloom again</p>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ── helpers ──────────────────────────────────────────────
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+
+// ── sparkle particles ─────────────────────────────────────
+const sparks = [];
+function addSpark(x, y) {
+  for (let i = 0; i < 8; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.3 + Math.random() * 1.2;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      life: 1,
+      size: 1 + Math.random() * 2
+    });
+  }
+}
+
+// ── grass blades ──────────────────────────────────────────
+function drawGrass(t) {
+  const blades = [
+    // [baseX, baseY, height, lean, color]
+    [50,  H, 160, -0.4, '#0a4a30'],
+    [80,  H, 130, -0.2, '#0d6040'],
+    [120, H, 180, 0.15, '#0a4a30'],
+    [160, H, 200, -0.1, '#0f7050'],
+    [530, H, 170, 0.3,  '#0a4a30'],
+    [570, H, 140, 0.15, '#0d6040'],
+    [610, H, 190, -0.1, '#0a4a30'],
+    [650, H, 160, 0.25, '#0f7050'],
+    [680, H, 120, 0.1,  '#0a4a30'],
+    [30,  H, 100, -0.5, '#0d5038'],
+    [700, H, 110, 0.4,  '#0d5038'],
+  ];
+  blades.forEach(([bx, by, h, lean, color]) => {
+    const grown = Math.min(1, t * 1.5);
+    const tip = easeOut(grown) * h;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(
+      bx + lean * tip * 0.8,
+      by - tip * 0.5,
+      bx + lean * tip,
+      by - tip
+    );
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+}
+
+// ── leaf shape ────────────────────────────────────────────
+function drawLeaf(x, y, len, angle, color, progress) {
+  const L = len * easeOut(Math.min(1, progress));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(
+    L * 0.3, -L * 0.25,
+    L * 0.7, -L * 0.3,
+    L, 0
+  );
+  ctx.bezierCurveTo(
+    L * 0.7, L * 0.1,
+    L * 0.3, L * 0.05,
+    0, 0
+  );
+  ctx.fillStyle = color;
+  ctx.shadowColor = 'rgba(20,180,120,0.2)';
+  ctx.shadowBlur = 6;
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── petal ─────────────────────────────────────────────────
+function drawPetal(cx, cy, angle, open, radius) {
+  const dist = radius * 0.45 * open;
+  const px = cx + Math.cos(angle) * dist;
+  const py = cy + Math.sin(angle) * dist;
+  const w  = radius * 0.55 * open;
+  const h  = radius * 0.72 * open;
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(angle + Math.PI / 2);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+
+  const grd = ctx.createRadialGradient(0, -h*0.15, 0, 0, 0, h * 0.5);
+  grd.addColorStop(0, '#e8fff8');
+  grd.addColorStop(0.4, '#9ee8ce');
+  grd.addColorStop(1, '#3db89a');
+  ctx.fillStyle = grd;
+  ctx.shadowColor = 'rgba(61,214,181,0.5)';
+  ctx.shadowBlur = 12;
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── single flower ─────────────────────────────────────────
+function drawFlower(cx, cy, stemHeight, petalR, delay, t) {
+  const stemT  = Math.max(0, Math.min(1, (t - delay) / 0.4));
+  const leafT  = Math.max(0, Math.min(1, (t - delay - 0.2) / 0.3));
+  const bloomT = Math.max(0, Math.min(1, (t - delay - 0.45) / 0.35));
+  const glowT  = Math.max(0, Math.min(1, (t - delay - 0.7) / 0.3));
+
+  const stemGrown = easeOut(stemT) * stemHeight;
+
+  // stem
+  if (stemT > 0) {
+    const grad = ctx.createLinearGradient(cx, cy, cx, cy - stemGrown);
+    grad.addColorStop(0, '#0d4a38');
+    grad.addColorStop(1, '#1a8060');
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy - stemGrown);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = 'rgba(20,160,100,0.3)';
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // leaves
+  if (leafT > 0) {
+    drawLeaf(cx, cy - stemGrown * 0.35, 55, -0.9, '#0d5e40', leafT);
+    drawLeaf(cx, cy - stemGrown * 0.55, 48,  2.3, '#0a4a30', leafT);
+    drawLeaf(cx, cy - stemGrown * 0.7,  40, -2.5, '#0f6e4a', leafT * 0.8);
+  }
+
+  // bloom
+  if (bloomT > 0) {
+    const openness = easeInOut(bloomT);
+    const N = 6;
+    const fx = cx, fy = cy - stemGrown;
+
+    for (let i = 0; i < N; i++) {
+      drawPetal(fx, fy, (i / N) * Math.PI * 2 - Math.PI / 2, openness, petalR);
+    }
+
+    // center
+    if (openness > 0.3) {
+      const cR = petalR * 0.22 * openness;
+      const cGrd = ctx.createRadialGradient(fx, fy, 0, fx, fy, cR);
+      cGrd.addColorStop(0, '#fffde8');
+      cGrd.addColorStop(0.5, '#ffe080');
+      cGrd.addColorStop(1, '#b8e0c8');
+      ctx.beginPath();
+      ctx.arc(fx, fy, cR, 0, Math.PI * 2);
+      ctx.fillStyle = cGrd;
+      ctx.shadowColor = 'rgba(255,240,100,0.6)';
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // glow aura
+    if (glowT > 0) {
+      const aR = petalR * 1.4 * glowT;
+      const aGrd = ctx.createRadialGradient(fx, fy, 0, fx, fy, aR);
+      aGrd.addColorStop(0, 'rgba(61,214,181,0.18)');
+      aGrd.addColorStop(1, 'rgba(61,214,181,0)');
+      ctx.beginPath();
+      ctx.arc(fx, fy, aR, 0, Math.PI * 2);
+      ctx.fillStyle = aGrd;
+      ctx.fill();
+
+      // tiny sparkle dots
+      if (glowT > 0.5 && Math.random() < 0.15) {
+        addSpark(fx + (Math.random()-0.5)*30, fy + (Math.random()-0.5)*30);
+      }
+    }
+  }
+}
+
+// ── ground foliage ────────────────────────────────────────
+function drawGroundLeaves(t) {
+  const p = Math.min(1, t * 1.2);
+  const leaves = [
+    [200, H-10, 90, -2.0, '#0a3a28'],
+    [220, H-10, 70, -2.3, '#0d5038'],
+    [240, H-5,  80, 2.2,  '#0a3528'],
+    [430, H-10, 85, -2.1, '#0a3a28'],
+    [460, H-5,  75, 2.3,  '#0d5038'],
+    [480, H-10, 65, 2.0,  '#0a3528'],
+  ];
+  leaves.forEach(([x, y, l, a, c]) => drawLeaf(x, y, l, a, c, p));
+}
+
+// ── background gradient ───────────────────────────────────
+function drawBg() {
+  const bg = ctx.createRadialGradient(W/2, H*0.6, 50, W/2, H*0.5, W*0.8);
+  bg.addColorStop(0, '#0a1f1a');
+  bg.addColorStop(0.5, '#060e0d');
+  bg.addColorStop(1, '#020808');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── main animation ────────────────────────────────────────
+let t = 0;
+let lastTime = null;
+
+const flowers = [
+  { cx: 280, cy: H - 10, h: 260, r: 60, delay: 0.0  },
+  { cx: 360, cy: H - 10, h: 310, r: 72, delay: 0.12 },
+  { cx: 440, cy: H - 10, h: 250, r: 55, delay: 0.22 },
+];
+
+function updateSparks() {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy += 0.04;
+    s.life -= 0.025;
+    if (s.life <= 0) sparks.splice(i, 1);
+  }
+}
+
+function drawSparks() {
+  sparks.forEach(s => {
+    ctx.save();
+    ctx.globalAlpha = s.life * 0.9;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fillStyle = '#d4fff2';
+    ctx.shadowColor = '#3dd6b5';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function frame(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = (ts - lastTime) / 1000;
+  lastTime = ts;
+  t = Math.min(t + dt * 0.1, 1.4);
+
+  ctx.clearRect(0, 0, W, H);
+  drawBg();
+
+  ctx.save();
+  drawGrass(t);
+  drawGroundLeaves(t);
+  flowers.forEach(f => drawFlower(f.cx, f.cy, f.h, f.r, f.delay, t));
+  ctx.restore();
+
+  updateSparks();
+  drawSparks();
+
+  if (t < 1.4) requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+// replay on click
+canvas.addEventListener('click', () => {
+  t = 0;
+  lastTime = null;
+  sparks.length = 0;
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>
