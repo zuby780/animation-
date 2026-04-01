@@ -168,11 +168,11 @@ function drawPetal(cx, cy, angle, open, radius) {
   ctx.ellipse(0, 0, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
 
   const grd = ctx.createRadialGradient(0, -h*0.15, 0, 0, 0, h * 0.5);
-  grd.addColorStop(0, '#e8fff8');
-  grd.addColorStop(0.4, '#9ee8ce');
-  grd.addColorStop(1, '#3db89a');
+  grd.addColorStop(0, '#ffe6f0');   // very light pink (center)
+ grd.addColorStop(0.4, '#ff99cc'); // main pink
+ grd.addColorStop(1, '#cc3366');   // darker edge
   ctx.fillStyle = grd;
-  ctx.shadowColor = 'rgba(61,214,181,0.5)';
+  ctx.shadowColor = 'rgba(255,105,180,0.35)';
   ctx.shadowBlur = 12;
   ctx.fill();
   ctx.restore();
